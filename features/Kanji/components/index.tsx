@@ -12,16 +12,20 @@ import {
   Circle,
   Filter,
   FilterX,
-  Loader2
+  Loader2,
+  MousePointer,
 } from 'lucide-react';
 import useKanjiStore from '@/features/Kanji/store/useKanjiStore';
 import useStatsStore from '@/features/Progress/store/useStatsStore';
 import KanjiSetDictionary from '@/features/Kanji/components/SetDictionary';
+
 import type { IKanjiObj } from '@/features/Kanji/store/useKanjiStore';
 import {
   kanjiDataService,
-  KanjiLevel
+  KanjiLevel,
 } from '@/features/Kanji/services/kanjiDataService';
+import { ActionButton } from '@/shared/components/ui/ActionButton';
+import QuickSelectModal from '@/shared/components/Modals/QuickSelectModal';
 
 const levelOrder: KanjiLevel[] = ['n5', 'n4', 'n3', 'n2', 'n1'];
 const KANJI_PER_SET = 10;
@@ -36,24 +40,30 @@ type KanjiCollectionMeta = {
 
 const KanjiCards = () => {
   const selectedKanjiCollectionName = useKanjiStore(
-    state => state.selectedKanjiCollection
+    (state) => state.selectedKanjiCollection
   );
 
-  const selectedKanjiSets = useKanjiStore(state => state.selectedKanjiSets);
+  const selectedKanjiSets = useKanjiStore((state) => state.selectedKanjiSets);
   const setSelectedKanjiSets = useKanjiStore(
-    state => state.setSelectedKanjiSets
+    (state) => state.setSelectedKanjiSets
   );
-  const addKanjiObjs = useKanjiStore(state => state.addKanjiObjs);
-  const collapsedRowsByUnit = useKanjiStore(state => state.collapsedRowsByUnit);
+  const { clearKanjiObjs, clearKanjiSets } = useKanjiStore();
+  const addKanjiObjs = useKanjiStore((state) => state.addKanjiObjs);
+  const collapsedRowsByUnit = useKanjiStore(
+    (state) => state.collapsedRowsByUnit
+  );
   const setCollapsedRowsForUnit = useKanjiStore(
-    state => state.setCollapsedRowsForUnit
+    (state) => state.setCollapsedRowsForUnit
   );
-  const allTimeStats = useStatsStore(state => state.allTimeStats);
+  const allTimeStats = useStatsStore((state) => state.allTimeStats);
 
   const { playClick } = useClick();
   const [kanjiCollections, setKanjiCollections] = useState<
     Partial<Record<KanjiLevel, KanjiCollectionMeta>>
   >({});
+
+  // Quick Select Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Track cumulative set counts for proper level numbering
   const [cumulativeCounts, setCumulativeCounts] = useState<Record<
@@ -71,7 +81,7 @@ const KanjiCards = () => {
         n4: 0,
         n3: 0,
         n2: 0,
-        n1: 0
+        n1: 0,
       };
       let cumulative = 0;
 
@@ -105,13 +115,13 @@ const KanjiCards = () => {
 
       if (!isMounted) return;
 
-      setKanjiCollections(prev => ({
+      setKanjiCollections((prev) => ({
         ...prev,
         [level]: {
           data: kanji,
           name: level.toUpperCase(),
-          prevLength: cumulativeCounts[level]
-        }
+          prevLength: cumulativeCounts[level],
+        },
       }));
     };
 
@@ -171,7 +181,9 @@ const KanjiCards = () => {
         setStart * KANJI_PER_SET,
         setEnd * KANJI_PER_SET
       );
-      return kanjiInSet.every(kanji => masteredCharacters.has(kanji.kanjiChar));
+      return kanjiInSet.every((kanji) =>
+        masteredCharacters.has(kanji.kanjiChar)
+      );
     },
     [selectedKanjiCollection, masteredCharacters]
   );
@@ -182,7 +194,7 @@ const KanjiCards = () => {
     filteredKanjiSets,
     masteredCount,
     allRows,
-    totalRows
+    totalRows,
   } = useMemo(() => {
     if (!selectedKanjiCollection) {
       return {
@@ -190,7 +202,7 @@ const KanjiCards = () => {
         filteredKanjiSets: [],
         masteredCount: 0,
         allRows: [],
-        totalRows: 0
+        totalRows: 0,
       };
     }
 
@@ -203,12 +215,14 @@ const KanjiCards = () => {
         start: i,
         end: i + 1,
         id: `Set ${i + 1}`,
-        isMastered: isSetMastered(i, i + 1)
+        isMastered: isSetMastered(i, i + 1),
       }));
 
-    const filtered = hideMastered ? sets.filter(set => !set.isMastered) : sets;
+    const filtered = hideMastered
+      ? sets.filter((set) => !set.isMastered)
+      : sets;
 
-    const mastered = sets.filter(set => set.isMastered).length;
+    const mastered = sets.filter((set) => set.isMastered).length;
     const rows = chunkArray(filtered, numColumns);
 
     return {
@@ -216,7 +230,7 @@ const KanjiCards = () => {
       filteredKanjiSets: filtered,
       masteredCount: mastered,
       allRows: rows,
-      totalRows: rows.length
+      totalRows: rows.length,
     };
   }, [selectedKanjiCollection, hideMastered, numColumns, isSetMastered]);
 
@@ -228,7 +242,7 @@ const KanjiCards = () => {
     if (isLoadingMore || !hasMoreRows) return;
     setIsLoadingMore(true);
     setTimeout(() => {
-      setVisibleRowCount(prev => Math.min(prev + ROWS_PER_LOAD, totalRows));
+      setVisibleRowCount((prev) => Math.min(prev + ROWS_PER_LOAD, totalRows));
       setIsLoadingMore(false);
     }, 150);
   }, [isLoadingMore, hasMoreRows, totalRows]);
@@ -239,7 +253,7 @@ const KanjiCards = () => {
     if (!loader) return;
 
     const observer = new IntersectionObserver(
-      entries => {
+      (entries) => {
         if (entries[0].isIntersecting && hasMoreRows && !isLoadingMore) {
           loadMoreRows();
         }
@@ -254,11 +268,63 @@ const KanjiCards = () => {
   // Check if user has any progress data
   const hasProgressData = Object.keys(allTimeStats.characterMastery).length > 0;
 
+  // Quick Select handlers
+  const handleToggleSet = (setName: string) => {
+    const set = kanjiSetsTemp.find((s) => s.name === setName);
+    if (!set || !selectedKanjiCollection) return;
+
+    const setWords = selectedKanjiCollection.data.slice(
+      set.start * KANJI_PER_SET,
+      set.end * KANJI_PER_SET
+    );
+
+    if (selectedKanjiSets.includes(setName)) {
+      setSelectedKanjiSets(selectedKanjiSets.filter((s) => s !== setName));
+    } else {
+      setSelectedKanjiSets([...new Set(selectedKanjiSets.concat(setName))]);
+    }
+    addKanjiObjs(setWords);
+  };
+
+  const handleSelectAll = () => {
+    const allSetNames = filteredKanjiSets.map((set) => set.name);
+    setSelectedKanjiSets(allSetNames);
+    // Add all kanji objects
+    if (selectedKanjiCollection) {
+      addKanjiObjs(selectedKanjiCollection.data);
+    }
+  };
+
+  const handleClearAll = () => {
+    clearKanjiSets();
+    clearKanjiObjs();
+  };
+
+  const handleSelectRandom = (count: number) => {
+    // Shuffle the filtered sets and take the first 'count' items
+    const shuffled = [...filteredKanjiSets].sort(() => Math.random() - 0.5);
+    const randomSets = shuffled.slice(0, Math.min(count, shuffled.length));
+    const randomSetNames = randomSets.map((set) => set.name);
+
+    setSelectedKanjiSets(randomSetNames);
+
+    // Add the kanji objects for the random sets
+    if (selectedKanjiCollection) {
+      const kanjiObjs = randomSets.flatMap((set) =>
+        selectedKanjiCollection.data.slice(
+          set.start * KANJI_PER_SET,
+          set.end * KANJI_PER_SET
+        )
+      );
+      addKanjiObjs(kanjiObjs);
+    }
+  };
+
   if (!selectedKanjiCollection) {
     return (
       <div className={clsx('flex flex-col w-full gap-4')}>
-        <div className='mx-4 px-4 py-3 rounded-xl bg-[var(--card-color)] border-2 border-[var(--border-color)]'>
-          <p className='text-sm text-[var(--secondary-color)]'>
+        <div className="mx-4 px-4 py-3 rounded-xl bg-[var(--card-color)] border-2 border-[var(--border-color)]">
+          <p className="text-sm text-[var(--secondary-color)]">
             Loading kanji sets...
           </p>
         </div>
@@ -267,11 +333,11 @@ const KanjiCards = () => {
   }
 
   return (
-    <div className='flex flex-col w-full gap-4'>
+    <div className="flex flex-col w-full gap-4">
       {/* Info message when no progress data exists */}
       {!hasProgressData && (
-        <div className='mx-4 px-4 py-3 rounded-xl bg-[var(--card-color)] border-2 border-[var(--border-color)]'>
-          <p className='text-sm text-[var(--secondary-color)]'>
+        <div className="mx-4 px-4 py-3 rounded-xl bg-[var(--card-color)] border-2 border-[var(--border-color)]">
+          <p className="text-sm text-[var(--secondary-color)]">
             💡 <strong>Tip:</strong> Complete some practice sessions to unlock
             the &ldquo;Hide Mastered Sets&rdquo; filter. Sets become mastered
             when you achieve 90%+ accuracy with 10+ attempts per character.
@@ -281,11 +347,11 @@ const KanjiCards = () => {
 
       {/* Filter Toggle Button - Only show if there are mastered sets */}
       {masteredCount > 0 && (
-        <div className='flex justify-end px-4'>
+        <div className="flex justify-end px-4">
           <button
             onClick={() => {
               playClick();
-              setHideMastered(prev => !prev);
+              setHideMastered((prev) => !prev);
             }}
             className={clsx(
               'flex items-center gap-2 px-4 py-2 rounded-xl',
@@ -298,15 +364,15 @@ const KanjiCards = () => {
           >
             {hideMastered ? (
               <>
-                <FilterX size={20} className='text-[var(--main-color)]' />
-                <span className='text-[var(--main-color)]'>
+                <FilterX size={20} className="text-[var(--main-color)]" />
+                <span className="text-[var(--main-color)]">
                   Show All Sets ({masteredCount} mastered hidden)
                 </span>
               </>
             ) : (
               <>
-                <Filter size={20} className='text-[var(--secondary-color)]' />
-                <span className='text-[var(--secondary-color)]'>
+                <Filter size={20} className="text-[var(--secondary-color)]" />
+                <span className="text-[var(--secondary-color)]">
                   Hide Mastered Sets ({masteredCount})
                 </span>
               </>
@@ -314,6 +380,29 @@ const KanjiCards = () => {
           </button>
         </div>
       )}
+
+      {/* Quick Select */}
+      <ActionButton
+        onClick={() => {
+          playClick();
+          setIsModalOpen(true);
+        }}
+      >
+        <MousePointer />
+        Quick Select
+      </ActionButton>
+
+      <QuickSelectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        sets={filteredKanjiSets}
+        selectedSets={selectedKanjiSets}
+        onToggleSet={handleToggleSet}
+        onSelectAll={handleSelectAll}
+        onClearAll={handleClearAll}
+        onSelectRandom={handleSelectRandom}
+        unitName={selectedKanjiCollectionName}
+      />
 
       {visibleRows.map((rowSets, rowIndex) => {
         const firstSetNumber = rowSets[0]?.name.match(/\d+/)?.[0] || '1';
@@ -328,9 +417,9 @@ const KanjiCards = () => {
             <h3
               onClick={() => {
                 playClick();
-                setCollapsedRows(prev =>
+                setCollapsedRows((prev) =>
                   prev.includes(rowIndex)
-                    ? prev.filter(i => i !== rowIndex)
+                    ? prev.filter((i) => i !== rowIndex)
                     : [...prev, rowIndex]
                 );
               }}
@@ -348,11 +437,11 @@ const KanjiCards = () => {
                 )}
                 size={28}
               />
-              <span className='max-lg:hidden'>
+              <span className="max-lg:hidden">
                 Levels {firstSetNumber}
                 {firstSetNumber !== lastSetNumber ? `-${lastSetNumber}` : ''}
               </span>
-              <span className='lg:hidden'>Level {firstSetNumber}</span>
+              <span className="lg:hidden">Level {firstSetNumber}</span>
             </h3>
 
             {!collapsedRows.includes(rowIndex) && (
@@ -390,13 +479,13 @@ const KanjiCards = () => {
                             ? 'bg-[var(--secondary-color)] text-[var(--background-color)] border-[var(--secondary-color-accent)]'
                             : 'bg-[var(--background-color)] border-[var(--border-color)] hover:border-[var(--main-color)]/80'
                         )}
-                        onClick={e => {
+                        onClick={(e) => {
                           e.currentTarget.blur();
                           playClick();
                           if (isSelected) {
                             setSelectedKanjiSets(
                               selectedKanjiSets.filter(
-                                set => set !== kanjiSetTemp.name
+                                (set) => set !== kanjiSetTemp.name
                               )
                             );
                             addKanjiObjs(setWords);
@@ -404,16 +493,16 @@ const KanjiCards = () => {
                             setSelectedKanjiSets([
                               ...new Set(
                                 selectedKanjiSets.concat(kanjiSetTemp.name)
-                              )
+                              ),
                             ]);
                             addKanjiObjs(setWords);
                           }
                         }}
                       >
                         {isSelected ? (
-                          <CircleCheck className='mt-0.5 text-[var(--background-color)] duration-250' />
+                          <CircleCheck className="mt-0.5 text-[var(--background-color)] duration-250" />
                         ) : (
-                          <Circle className='mt-0.5 text-[var(--border-color)] duration-250' />
+                          <Circle className="mt-0.5 text-[var(--border-color)] duration-250" />
                         )}
                         {kanjiSetTemp.name.replace('Set ', 'Level ')}
                       </button>
@@ -428,15 +517,15 @@ const KanjiCards = () => {
       })}
 
       {/* Infinite scroll loader */}
-      <div ref={loaderRef} className='flex justify-center py-4'>
+      <div ref={loaderRef} className="flex justify-center py-4">
         {isLoadingMore && (
           <Loader2
-            className='animate-spin text-[var(--secondary-color)]'
+            className="animate-spin text-[var(--secondary-color)]"
             size={24}
           />
         )}
         {hasMoreRows && !isLoadingMore && (
-          <span className='text-sm text-[var(--secondary-color)]'>
+          <span className="text-sm text-[var(--secondary-color)]">
             Scroll for more ({totalRows - visibleRowCount} rows remaining)
           </span>
         )}
