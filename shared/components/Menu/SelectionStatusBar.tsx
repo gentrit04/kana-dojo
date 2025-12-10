@@ -24,8 +24,10 @@ const SelectionStatusBar = () => {
   const isKanji = contentType === 'kanji';
 
   // Kana store
-  const kanaGroupIndices = useKanaStore(state => state.kanaGroupIndices);
-  const addKanaGroupIndices = useKanaStore(state => state.addKanaGroupIndices);
+  const kanaGroupIndices = useKanaStore((state) => state.kanaGroupIndices);
+  const addKanaGroupIndices = useKanaStore(
+    (state) => state.addKanaGroupIndices
+  );
 
   // Kanji store
   const { selectedKanjiSets, clearKanjiObjs, clearKanjiSets } = useKanjiStore();
@@ -38,7 +40,7 @@ const SelectionStatusBar = () => {
     const full: string[] = [];
     const compact: string[] = [];
 
-    kanaGroupIndices.forEach(i => {
+    kanaGroupIndices.forEach((i) => {
       const group = kana[i];
       if (!group) {
         const fallback = `Group ${i + 1}`;
@@ -140,6 +142,42 @@ const SelectionStatusBar = () => {
     };
   }, []);
 
+  // Group per range, 1-10, 20-40
+  const formatLevelsAsRanges = (sets: string[]): string => {
+    if (sets.length === 0) return 'None';
+
+    // Extract numbers and sort
+    const numbers = sets
+      .map((set) => parseInt(set.replace('Set ', '')))
+      .sort((a, b) => a - b);
+
+    const ranges: string[] = [];
+    let rangeStart = numbers[0];
+    let rangeEnd = numbers[0];
+
+    for (let i = 1; i < numbers.length; i++) {
+      if (numbers[i] === rangeEnd + 1) {
+        // Consecutive number, extend the range
+        rangeEnd = numbers[i];
+      } else {
+        // gap, save current range and start new one
+        ranges.push(
+          rangeStart === rangeEnd
+            ? `${rangeStart}`
+            : `${rangeStart}-${rangeEnd}`
+        );
+        rangeStart = numbers[i];
+        rangeEnd = numbers[i];
+      }
+    }
+
+    ranges.push(
+      rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`
+    );
+
+    return ranges.join(', ');
+  };
+
   // For kanji/vocab: sort by set number
   const selectedSets = isKanji ? selectedKanjiSets : selectedVocabSets;
   const sortedSets =
@@ -151,22 +189,23 @@ const SelectionStatusBar = () => {
         })
       : [];
 
-  // Compact: "1, 2, 3" for kanji/vocab, or "あ, か, さ" for kana
+  // Compact: "1-5, 8-10" for kanji/vocab
   const formattedSelectionCompact = isKana
     ? kanaGroupNamesCompact.length > 0
       ? kanaGroupNamesCompact.join(', ')
       : 'None'
-    : sortedSets.length > 0
-    ? sortedSets.map(set => set.replace('Set ', '')).join(', ')
-    : 'None';
+    : formatLevelsAsRanges(sortedSets);
 
-  // Full: "Level 1, Level 2, Level 3" for kanji/vocab, same as compact for kana
+  // Full: "Level 1-5, Level 8-10" for kanji/vocab
   const formattedSelectionFull = isKana
     ? kanaGroupNamesFull.length > 0
       ? kanaGroupNamesFull.join(', ')
       : 'None'
     : sortedSets.length > 0
-    ? sortedSets.map(set => set.replace('Set ', 'Level ')).join(', ')
+    ? formatLevelsAsRanges(sortedSets)
+        .split(', ')
+        .map((range) => `Level ${range}`)
+        .join(', ')
     : 'None';
 
   // Label text
