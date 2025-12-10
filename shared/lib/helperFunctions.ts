@@ -47,7 +47,7 @@ export function findHighestCounts(data: Data): HighestCounts {
     highestCorrectCharsValue: maxCorrectValue,
 
     highestWrongChars: maxWrongKeys,
-    highestWrongCharsValue: maxWrongValue
+    highestWrongCharsValue: maxWrongValue,
   };
 }
 
@@ -61,3 +61,37 @@ export function chunkArray(
   }
   return result;
 }
+
+// Group per range, 1-10, 20-40
+export const formatLevelsAsRanges = (sets: string[]): string => {
+  if (sets.length === 0) return 'None';
+
+  // Extract numbers and sort
+  const numbers = sets
+    .map((set) => parseInt(set.replace('Set ', '')))
+    .sort((a, b) => a - b);
+
+  const ranges: string[] = [];
+  let rangeStart = numbers[0];
+  let rangeEnd = numbers[0];
+
+  for (let i = 1; i < numbers.length; i++) {
+    if (numbers[i] === rangeEnd + 1) {
+      // Consecutive number, extend the range
+      rangeEnd = numbers[i];
+    } else {
+      // gap, save current range and start new one
+      ranges.push(
+        rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`
+      );
+      rangeStart = numbers[i];
+      rangeEnd = numbers[i];
+    }
+  }
+
+  ranges.push(
+    rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`
+  );
+
+  return ranges.join(', ');
+};
