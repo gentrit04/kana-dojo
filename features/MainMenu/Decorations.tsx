@@ -96,21 +96,45 @@ const loadDecorationFonts = async (
   return fontsLoadingPromise;
 };
 
+type AnimState = 'idle' | 'exploding' | 'hidden' | 'fading-in';
+
+// Get neighbors for a given index in a grid
+const getNeighbors = (
+  index: number,
+  columns: number,
+  total: number
+): number[] => {
+  const row = Math.floor(index / columns);
+  const col = index % columns;
+  const neighbors: number[] = [];
+
+  // Left
+  if (col > 0) neighbors.push(index - 1);
+  // Right
+  if (col < columns - 1) neighbors.push(index + 1);
+  // Top
+  if (row > 0) neighbors.push(index - columns);
+  // Bottom
+  if (index + columns < total) neighbors.push(index + columns);
+
+  return neighbors;
+};
+
 // Component to render a single kanji character with random styles
 const KanjiCharacter = ({
   char,
   forceShow = false,
-  interactive = false
+  interactive = false,
+  animState = 'idle',
+  onExplode
 }: {
   char: string;
   forceShow?: boolean;
   interactive?: boolean;
+  animState?: AnimState;
+  onExplode?: () => void;
 }) => {
   const [mounted, setMounted] = useState(false);
-  const [animState, setAnimState] = useState<
-    'idle' | 'exploding' | 'hidden' | 'fading-in'
-  >('idle');
-  const { playClick } = useClick();
   const [styles, setStyles] = useState({
     color: '',
     fontClass: '',
@@ -154,21 +178,8 @@ const KanjiCharacter = ({
   }, []);
 
   const handleClick = () => {
-    if (!interactive || animState !== 'idle') return;
-    playClick();
-    setAnimState('exploding');
-    // After explosion animation (300ms), hide it
-    setTimeout(() => {
-      setAnimState('hidden');
-      // After 1.5s hidden, start fading back in
-      setTimeout(() => {
-        setAnimState('fading-in');
-        // After fade-in animation (500ms), return to idle
-        setTimeout(() => {
-          setAnimState('idle');
-        }, 500);
-      }, 1500);
-    }, 300);
+    if (!interactive || animState !== 'idle' || !onExplode) return;
+    onExplode();
   };
 
   if (!mounted) return null;
@@ -192,7 +203,7 @@ const KanjiCharacter = ({
   return (
     <span
       className={clsx(
-        'text-4xl',
+        'text-4xl inline-flex items-center justify-center',
         styles.fontClass,
         !interactive && styles.animation,
         interactive && 'cursor-pointer'
@@ -200,6 +211,7 @@ const KanjiCharacter = ({
       aria-hidden='true'
       style={{
         color: styles.color,
+        transformOrigin: 'center center',
         ...getAnimationStyle()
       }}
       onClick={interactive ? handleClick : undefined}
@@ -207,6 +219,29 @@ const KanjiCharacter = ({
       {char}
     </span>
   );
+};
+
+// Custom hook to get current column count based on screen size
+const useColumns = (interactive: boolean) => {
+  const [columns, setColumns] = useState(28);
+
+  useEffect(() => {
+    if (!interactive) {
+      setColumns(28);
+      return;
+    }
+
+    const updateColumns = () => {
+      // md breakpoint is 768px
+      setColumns(window.innerWidth >= 768 ? 28 : 10);
+    };
+
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, [interactive]);
+
+  return columns;
 };
 
 const Decorations = ({
@@ -219,6 +254,15 @@ const Decorations = ({
   interactive?: boolean;
 }) => {
   const [kanjiList, setKanjiList] = useState<string[]>([]);
+  const [animStates, setAnimStates] = useState<Map<number, AnimState>>(
+    new Map()
+  );
+  // Use ref for synchronous chain tracking (state updates are async and cause infinite loops)
+  const explodedInChainRef = useRef<Set<number>>(new Set());
+  // Track if user has already triggered an explosion (single-click only)
+  const hasTriggeredRef = useRef(false);
+  const columns = useColumns(interactive);
+  const { playClick } = useClick();
 
   useEffect(() => {
     let isMounted = true;
@@ -243,6 +287,50 @@ const Decorations = ({
     };
   }, []);
 
+  const triggerExplosion = (index: number, isChainReaction = false) => {
+    // Check if already in current chain (synchronous check via ref)
+    if (explodedInChainRef.current.has(index)) return;
+
+    // Only allow one initial click per page load
+    if (!isChainReaction) {
+      if (hasTriggeredRef.current) return;
+      hasTriggeredRef.current = true;
+      playClick();
+      // Reset chain tracking for new explosion
+      explodedInChainRef.current = new Set([index]);
+    } else {
+      explodedInChainRef.current.add(index);
+    }
+
+    // Set to exploding
+    setAnimStates(prev => new Map(prev).set(index, 'exploding'));
+
+    // Trigger neighbors after delay
+    setTimeout(() => {
+      const neighbors = getNeighbors(index, columns, kanjiList.length);
+      neighbors.forEach((neighborIndex, i) => {
+        setTimeout(() => {
+          triggerExplosion(neighborIndex, true);
+        }, i * 30); // Stagger neighbor explosions
+      });
+    }, 50);
+
+    // Animation state transitions
+    setTimeout(() => {
+      setAnimStates(prev => new Map(prev).set(index, 'hidden'));
+      setTimeout(() => {
+        setAnimStates(prev => new Map(prev).set(index, 'fading-in'));
+        setTimeout(() => {
+          setAnimStates(prev => {
+            const next = new Map(prev);
+            next.delete(index);
+            return next;
+          });
+        }, 500);
+      }, 1500);
+    }, 300);
+  };
+
   return (
     <>
       {interactive && <style>{explosionKeyframes}</style>}
@@ -265,6 +353,8 @@ const Decorations = ({
               key={index}
               forceShow={forceShow}
               interactive={interactive}
+              animState={animStates.get(index) ?? 'idle'}
+              onExplode={() => triggerExplosion(index)}
             />
           ))}
         </div>

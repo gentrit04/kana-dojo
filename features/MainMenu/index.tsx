@@ -296,7 +296,7 @@ const MainMenu = () => {
           expandDecorations && 'hidden'
         )}
       >
-        <div className='flex justify-evenly items-center  w-full lg:w-1/3   '>
+        <div className='flex justify-evenly items-center w-full lg:w-2/5'>
           {legalLinks.map((link, i) => (
             <Link
               href={link.href}
@@ -313,9 +313,9 @@ const MainMenu = () => {
           ))}
         </div>
       </div>
-      {showBanner && (
+      {/* {showBanner && (
         <NightlyBanner onSwitch={handleSwitch} onDismiss={handleDismiss} />
-      )}
+      )} */}
     </div>
   );
 };
