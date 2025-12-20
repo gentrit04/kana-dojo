@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Kuroshiro from 'kuroshiro';
-import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
 
 // Simple in-memory cache for translations (reduces API calls)
 const translationCache = new Map<
@@ -47,15 +45,24 @@ interface GoogleTranslateResponse {
   };
 }
 
+// Type for kuroshiro instance (using type assertion since it's dynamically imported)
+type KuroshiroInstance = {
+  convert: (
+    text: string,
+    options: { to: string; mode: string; romajiSystem: string }
+  ) => Promise<string>;
+};
+
 // Singleton kuroshiro instance for reuse across requests
-let kuroshiroInstance: Kuroshiro | null = null;
-let kuroshiroInitPromise: Promise<Kuroshiro> | null = null;
+let kuroshiroInstance: KuroshiroInstance | null = null;
+let kuroshiroInitPromise: Promise<KuroshiroInstance> | null = null;
 
 /**
  * Get or initialize the kuroshiro instance
  * Uses singleton pattern to avoid reinitializing on every request
+ * LAZY LOADED: Only imports kuroshiro packages when actually needed (828KB savings if not used)
  */
-async function getKuroshiro(): Promise<Kuroshiro> {
+async function getKuroshiro(): Promise<KuroshiroInstance> {
   if (kuroshiroInstance) {
     return kuroshiroInstance;
   }
@@ -65,10 +72,18 @@ async function getKuroshiro(): Promise<Kuroshiro> {
   }
 
   kuroshiroInitPromise = (async () => {
+    // Lazy load kuroshiro and analyzer (only when romanization is needed)
+    const [{ default: Kuroshiro }, { default: KuromojiAnalyzer }] =
+      await Promise.all([
+        import('kuroshiro'),
+        import('kuroshiro-analyzer-kuromoji')
+      ]);
+
     const kuroshiro = new Kuroshiro();
     const analyzer = new KuromojiAnalyzer();
     await kuroshiro.init(analyzer);
     kuroshiroInstance = kuroshiro;
+    kuroshiroInitPromise = null;
     return kuroshiro;
   })();
 
