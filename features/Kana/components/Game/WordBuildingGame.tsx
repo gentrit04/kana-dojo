@@ -52,7 +52,7 @@ const Tile = memo(({ id, char, onClick, isDisabled, isBlank }: TileProps) => {
     return (
       <div
         className={clsx(
-          'relative flex items-center justify-center rounded-2xl px-4 py-3 text-2xl font-semibold sm:px-6 sm:py-4 sm:text-3xl',
+          'relative flex items-center justify-center rounded-xl px-3 py-2 text-xl font-medium sm:px-4 sm:py-2.5 sm:text-2xl',
           'border-b-4 border-transparent bg-[var(--border-color)]/30',
           'select-none'
         )}
@@ -69,7 +69,7 @@ const Tile = memo(({ id, char, onClick, isDisabled, isBlank }: TileProps) => {
       onClick={onClick}
       disabled={isDisabled}
       className={clsx(
-        'relative flex cursor-pointer items-center justify-center rounded-2xl px-4 py-3 text-2xl font-semibold transition-colors sm:px-6 sm:py-4 sm:text-3xl',
+        'relative flex cursor-pointer items-center justify-center rounded-xl px-3 py-2 text-xl font-medium transition-colors sm:px-4 sm:py-2.5 sm:text-2xl',
         'border-b-4 active:translate-y-[4px] active:border-b-0',
         'border-[var(--secondary-color-accent)] bg-[var(--secondary-color)] text-[var(--background-color)]',
         isDisabled && 'cursor-not-allowed opacity-50'
@@ -379,7 +379,7 @@ const WordBuildingGame = ({
 
       {/* Answer Row Area - bordered section like Duolingo */}
       <div className='flex w-full flex-col items-center'>
-        <div className='flex h-20 w-full items-center border-t-2 border-b-2 border-[var(--border-color)] px-4 sm:w-1/2'>
+        <div className='flex h-24 w-full items-center border-t-2 border-b-2 border-[var(--border-color)] px-4 sm:w-1/2'>
           <div className='flex flex-row flex-wrap justify-start gap-3'>
             <AnimatePresence mode='popLayout'>
               {placedTiles.map((char, index) => (
